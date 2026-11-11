@@ -1,5 +1,5 @@
 /**
- * JARVIS configuration.
+ * ALFRED configuration.
  *
  * Everything here is read from Vite env vars (.env.local) so no secrets are
  * committed. See .env.example for the full list.
@@ -31,7 +31,7 @@ function choice<T extends string>(
   if (value === undefined) return fallback
   if ((allowed as readonly string[]).includes(value)) return value as T
   console.warn(
-    `[jarvis] ${name}="${value}" is not one of ${allowed.join(' | ')} — using "${fallback}".`,
+    `[alfred] ${name}="${value}" is not one of ${allowed.join(' | ')} — using "${fallback}".`,
   )
   return fallback
 }
@@ -42,7 +42,7 @@ function flag(name: string, raw: unknown, fallback: boolean): boolean {
   if (value === undefined) return fallback
   if (value === 'true' || value === '1') return true
   if (value === 'false' || value === '0') return false
-  console.warn(`[jarvis] ${name}="${value}" is not true or false — using ${fallback}.`)
+  console.warn(`[alfred] ${name}="${value}" is not true or false — using ${fallback}.`)
   return fallback
 }
 
@@ -51,7 +51,7 @@ function flag(name: string, raw: unknown, fallback: boolean): boolean {
  *
  *   'bridge' — run `npm run bridge` alongside the app. Authenticates off your
  *              existing Claude Code login (no API key), and every MCP server in
- *              your Claude Code config is available to JARVIS, including local
+ *              your Claude Code config is available to ALFRED, including local
  *              ones like higgsfield, elevenlabs, android and playwright.
  *
  *   'direct' — the browser calls the Claude API itself. Nothing to run and it
@@ -133,7 +133,6 @@ export const env = {
   elevenKey: str(import.meta.env.VITE_ELEVENLABS_API_KEY) ?? '',
   elevenVoiceId:
     str(import.meta.env.VITE_ELEVENLABS_VOICE_ID) ?? 'JBFqnCBsd6RMkjVDRZzb',
-  porcupineKey: str(import.meta.env.VITE_PICOVOICE_ACCESS_KEY) ?? '',
 }
 
 /** `claude-opus-5` is the strongest model; `claude-sonnet-5` trades a little
@@ -146,18 +145,6 @@ export const MODEL = 'claude-opus-5'
  * For a recorded demo the snappiness is worth it; flip to false to save money.
  */
 export const FAST_MODE = true
-
-/**
- * Wake-word engine.
- *   'speech'    — zero setup, uses the browser's SpeechRecognition to listen for
- *                 "hey jarvis". Chrome/Edge only, audio goes to Google.
- *   'porcupine' — recommended. Runs offline in WASM, "Jarvis" is a built-in
- *                 keyword, far fewer false triggers. Needs a free AccessKey
- *                 from console.picovoice.ai.
- */
-export const WAKE_ENGINE: 'speech' | 'porcupine' = env.porcupineKey
-  ? 'porcupine'
-  : 'speech'
 
 // ---------------------------------------------------------------------------
 // MCP servers
@@ -178,7 +165,7 @@ export type McpServer = {
 /**
  * These are passed to the Messages API `mcp_servers` parameter. Anthropic dials
  * the servers itself, so there is no CORS to fight and no local bridge to run —
- * which is what makes a backend-free JARVIS possible.
+ * which is what makes a backend-free ALFRED possible.
  *
  * Only *remote HTTP* MCP servers work here. Local stdio servers (filesystem,
  * Blender, Playwright) need a machine to run on and are out of scope for a
@@ -252,7 +239,7 @@ export const MCP_SERVERS: McpServer[] = [
     enabled: Boolean(str(import.meta.env.VITE_SENTRY_TOKEN)),
   },
   // Home Assistant is self-hosted, so this needs a publicly reachable URL
-  // (Nabu Casa Cloud, or a Cloudflare tunnel). Worth the setup — "Jarvis, dim
+  // (Nabu Casa Cloud, or a Cloudflare tunnel). Worth the setup — "Alfred, dim
   // the lights" with the room actually dimming is the best shot in the video.
   // Both halves are required: an instance reachable from Anthropic's servers
   // with no bearer token attached is one that answers 401 to every tool call,
@@ -276,7 +263,7 @@ export const activeServers = () => MCP_SERVERS.filter((s) => s.enabled && s.url)
  * fuller version in bridge/server.mjs — that's the one that gets used by
  * default, and the one worth editing.
  */
-export const SYSTEM_PROMPT = `You are JARVIS, Tony Stark's assistant. You are speaking out loud.
+export const SYSTEM_PROMPT = `You are ALFRED, a discreet personal assistant. You are speaking out loud.
 
 THE HARD RULE: your entire reply must be under 60 words. This is not a style
 preference — every word is read aloud by a speech synthesiser and the user is

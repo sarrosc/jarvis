@@ -1,5 +1,5 @@
 /**
- * JARVIS local bridge.
+ * ALFRED local bridge.
  *
  * Runs the Claude Agent SDK — Claude Code as a library — and exposes one turn
  * of conversation over a WebSocket. The browser stays the face and the voice;
@@ -22,11 +22,11 @@ import { uiServer } from './ui.mjs'
 import { chromeAvailable, chromeServer } from './chrome.mjs'
 import { visionServer } from './vision.mjs'
 import { homedir, tmpdir } from 'node:os'
-import { mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { openRemote, proxyError, vetTarget, PROXY_UA } from './net.mjs'
-import { probeUrl, renderPage } from './page.mjs'
+import { renderPage } from './page.mjs'
 import {
   builtinTools,
   checkToolUse,
@@ -35,7 +35,7 @@ import {
   fileRoots,
 } from './policy.mjs'
 
-const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
+const PORT = Number(process.env.ALFRED_BRIDGE_PORT ?? 8787)
 
 /**
  * Which interface to listen on. Loopback, unless you say otherwise.
@@ -53,7 +53,7 @@ const PORT = Number(process.env.JARVIS_BRIDGE_PORT ?? 8787)
  */
 // Blank counts as unset: listen(PORT, '') binds every interface, which is the
 // one outcome this default exists to prevent.
-const HOST = process.env.JARVIS_BRIDGE_HOST?.trim() || '127.0.0.1'
+const HOST = process.env.ALFRED_BRIDGE_HOST?.trim() || '127.0.0.1'
 
 /**
  * A crash here takes the whole assistant down mid-sentence, and most of what
@@ -62,7 +62,7 @@ const HOST = process.env.JARVIS_BRIDGE_HOST?.trim() || '127.0.0.1'
  * its own error to the browser.
  */
 process.on('unhandledRejection', (err) => {
-  console.error('[jarvis] unhandled rejection:', err)
+  console.error('[alfred] unhandled rejection:', err)
 })
 
 /**
@@ -78,15 +78,15 @@ process.on('unhandledRejection', (err) => {
  *
  * A missing Origin means a non-browser client — curl, a script, a native app.
  * That is also exactly what local malware looks like, so it is refused on the
- * socket unless JARVIS_ALLOW_NO_ORIGIN=1 says otherwise.
+ * socket unless ALFRED_ALLOW_NO_ORIGIN=1 says otherwise.
  */
 const EXTRA_ORIGINS = new Set(
-  (process.env.JARVIS_ALLOWED_ORIGINS ?? '')
+  (process.env.ALFRED_ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((s) => s.trim().replace(/\/+$/, ''))
     .filter(Boolean),
 )
-const ALLOW_NO_ORIGIN = process.env.JARVIS_ALLOW_NO_ORIGIN === '1'
+const ALLOW_NO_ORIGIN = process.env.ALFRED_ALLOW_NO_ORIGIN === '1'
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 
@@ -94,7 +94,7 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
  * Vite takes the next free port when 5173 is busy and `vite preview` starts at
  * 4173, so the dev ranges are allowed rather than two exact numbers. Anything
  * else — including localhost on a port some other app is serving — has to be
- * named in JARVIS_ALLOWED_ORIGINS.
+ * named in ALFRED_ALLOWED_ORIGINS.
  */
 const isDevPort = (port) =>
   (port >= 5173 && port <= 5199) || (port >= 4173 && port <= 4199)
@@ -124,11 +124,11 @@ function originAllowed(origin) {
  * is talking to. So anything addressed to a name other than loopback is
  * refused before it is routed.
  *
- * JARVIS_ALLOWED_HOSTS names extra hostnames, for anyone who deliberately
+ * ALFRED_ALLOWED_HOSTS names extra hostnames, for anyone who deliberately
  * serves the bridge under another name.
  */
 const EXTRA_HOSTS = new Set(
-  (process.env.JARVIS_ALLOWED_HOSTS ?? '')
+  (process.env.ALFRED_ALLOWED_HOSTS ?? '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
@@ -150,34 +150,34 @@ function hostAllowed(host) {
  * click and the model can't pause for one. So the bridge decides.
  *
  * Read-only and generative tools run freely. Anything that writes to disk,
- * runs a shell, or changes the world waits for JARVIS_ALLOW_WRITES=1 (or the
+ * runs a shell, or changes the world waits for ALFRED_ALLOW_WRITES=1 (or the
  * --writes flag, which `npm run bridge:writes` passes — a flag works in every
  * shell, where an inline env assignment does not run on Windows). Start
  * without it, and turn it on once you trust what you're demoing.
  */
 const ALLOW_WRITES =
-  process.env.JARVIS_ALLOW_WRITES === '1' || process.argv.includes('--writes')
+  process.env.ALFRED_ALLOW_WRITES === '1' || process.argv.includes('--writes')
 
 /**
  * Built-in capabilities to leave out entirely: `browser` (the user's own
  * Chrome), `camera`, `interface` (the ui_* tools). A capability left out is
  * not merely denied — its tools never reach the model, which also saves their
  * schemas on every turn (about 3,100, 1,400 and 4,800 input tokens
- * respectively). The display itself is always on; it is how JARVIS shows
+ * respectively). The display itself is always on; it is how ALFRED shows
  * anything.
  */
 const DISABLED = new Set(
-  (process.env.JARVIS_DISABLE ?? '')
+  (process.env.ALFRED_DISABLE ?? '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),
 )
 
 /**
- * The orchestrator model. Override with JARVIS_MODEL to trade quality for pace
+ * The orchestrator model. Override with ALFRED_MODEL to trade quality for pace
  * — claude-sonnet-5 is noticeably snappier on camera if Opus feels slow.
  */
-const MODEL = process.env.JARVIS_MODEL ?? 'claude-opus-5'
+const MODEL = process.env.ALFRED_MODEL ?? 'claude-opus-5'
 
 /**
  * How hard the model thinks before answering.
@@ -194,7 +194,7 @@ const MODEL = process.env.JARVIS_MODEL ?? 'claude-opus-5'
  * matters more than pace; drop back to 'low' when filming and every second of
  * dead air shows.
  */
-const EFFORT = process.env.JARVIS_EFFORT ?? 'high'
+const EFFORT = process.env.ALFRED_EFFORT ?? 'high'
 
 /**
  * Every MCP server Claude Code has configured, read out of its own config.
@@ -230,11 +230,11 @@ function configuredServers() {
 }
 
 /**
- * Which of those JARVIS actually gets.
+ * Which of those ALFRED actually gets.
  *
  * Every server in your Claude Code config is a server a voice agent that reads
  * the open web can be talked into calling, so "all of them" is a poor default
- * for anyone whose config has grown. JARVIS_MCP_SERVERS names the ones to hand
+ * for anyone whose config has grown. ALFRED_MCP_SERVERS names the ones to hand
  * over, comma separated; unset keeps the old behaviour of passing everything
  * configured, and an empty value passes none.
  */
@@ -249,7 +249,7 @@ function allowedServers(all, list) {
   return Object.fromEntries(Object.entries(all).filter(([name]) => wanted.has(name)))
 }
 
-const MCP_SERVERS = allowedServers(configuredServers(), process.env.JARVIS_MCP_SERVERS)
+const MCP_SERVERS = allowedServers(configuredServers(), process.env.ALFRED_MCP_SERVERS)
 
 /**
  * Account connectors — the mail, drive, calendar and other integrations
@@ -259,12 +259,12 @@ const MCP_SERVERS = allowedServers(configuredServers(), process.env.JARVIS_MCP_S
  * after the first question. Measured on SDK 0.3.220: mail, drive, calendar
  * and other account connectors all arrived that way, with their read tools
  * running in read-only mode and their send, share and delete tools one
- * JARVIS_ALLOW_WRITES away.
+ * ALFRED_ALLOW_WRITES away.
  *
  * strictMcpConfig limits the session to the servers passed below. Set
- * JARVIS_ACCOUNT_CONNECTORS=1 to let the account's connectors in as well.
+ * ALFRED_ACCOUNT_CONNECTORS=1 to let the account's connectors in as well.
  */
-const ACCOUNT_CONNECTORS = process.env.JARVIS_ACCOUNT_CONNECTORS === '1'
+const ACCOUNT_CONNECTORS = process.env.ALFRED_ACCOUNT_CONNECTORS === '1'
 
 /**
  * The tool policy lives in policy.mjs so it can be tested on its own. Bound to
@@ -274,22 +274,22 @@ const decideTool = (name) => decidePolicy(name, ALLOW_WRITES)
 
 /**
  * The agent's working directory, and the only folder its file tools may use
- * besides the temp directory and JARVIS_FILE_ROOTS.
+ * besides the temp directory and ALFRED_FILE_ROOTS.
  *
  * This used to be the home directory, which made every file under it — SSH
  * keys, the Claude login, other projects' .env files — fair game for a Read,
  * and the CLI approves reads inside its working directory without asking
- * anyone. A dedicated folder keeps "what can a web page talk JARVIS into
- * reading" down to what JARVIS itself put there.
+ * anyone. A dedicated folder keeps "what can a web page talk ALFRED into
+ * reading" down to what ALFRED itself put there.
  */
 const WORKSPACE = resolvePath(
-  process.env.JARVIS_WORKSPACE ?? join(homedir(), '.jarvis', 'workspace'),
+  process.env.ALFRED_WORKSPACE ?? join(homedir(), '.alfred', 'workspace'),
 )
 mkdirSync(WORKSPACE, { recursive: true })
 
 const TOOL_ROOTS = fileRoots({
   workspace: WORKSPACE,
-  extra: (process.env.JARVIS_FILE_ROOTS ?? '')
+  extra: (process.env.ALFRED_FILE_ROOTS ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
@@ -312,7 +312,7 @@ const enforcePolicy = async (input) => {
     if (problem) reason = `Blocked: that address cannot be fetched (${problem}).`
   }
   if (!reason) return {}
-  console.log(`[jarvis] tool ${input.tool_name} -> deny (policy)`)
+  console.log(`[alfred] tool ${input.tool_name} -> deny (policy)`)
   return {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
@@ -324,11 +324,11 @@ const enforcePolicy = async (input) => {
 
 /**
  * The persona, in sections, so a capability that is switched off
- * (JARVIS_DISABLE) takes its instructions with it. Telling the model to reach
+ * (ALFRED_DISABLE) takes its instructions with it. Telling the model to reach
  * for chrome_* tools first when there are none costs a failed turn, and every
  * section is input tokens on every turn.
  */
-const PROMPT_CORE = `You are JARVIS. You are speaking out loud to one person.
+const PROMPT_CORE = `You are ALFRED. You are speaking out loud to one person.
 
 LENGTH. Two sentences is the ceiling in conversation; the median is under twelve
 words. Every word is read aloud and the user waits in silence while it plays, so
@@ -497,19 +497,31 @@ const SYSTEM_PROMPT = [
  * machine — no reason to make you paste it into a second .env file. The browser
  * never sees it: it POSTs text to /tts here and gets audio back.
  */
+// Asked on every /tts call — once per spoken sentence — and ~/.claude.json
+// grows to megabytes of project history, so re-reading and re-parsing it each
+// time blocked the event loop mid-answer. The key is cached against the file's
+// mtime: a cheap stat per call, and an edited config is still picked up.
+let elevenCache = { mtimeMs: -1, key: null }
 function elevenKey() {
   if (process.env.ELEVENLABS_API_KEY) return process.env.ELEVENLABS_API_KEY
+  const file = join(homedir(), '.claude.json')
   try {
-    const cfg = JSON.parse(
-      readFileSync(join(homedir(), '.claude.json'), 'utf8'),
-    )
-    return cfg.mcpServers?.elevenlabs?.env?.ELEVENLABS_API_KEY ?? null
+    const { mtimeMs } = statSync(file)
+    if (mtimeMs !== elevenCache.mtimeMs) {
+      const cfg = JSON.parse(readFileSync(file, 'utf8'))
+      elevenCache = {
+        mtimeMs,
+        key: cfg.mcpServers?.elevenlabs?.env?.ELEVENLABS_API_KEY ?? null,
+      }
+    }
+    return elevenCache.key
   } catch {
+    elevenCache = { mtimeMs: -1, key: null }
     return null
   }
 }
 
-const VOICE_ID = process.env.JARVIS_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb'
+const VOICE_ID = process.env.ALFRED_VOICE_ID ?? 'JBFqnCBsd6RMkjVDRZzb'
 
 /**
  * Where /file is permitted to read from, and how big a read may get.
@@ -539,7 +551,7 @@ const FILE_ROOTS = [
   // still write it to /tmp. Dropping one of them loses real panels.
   tmpdir(),
   '/tmp',
-  ...(process.env.JARVIS_FILE_ROOTS ?? '')
+  ...(process.env.ALFRED_FILE_ROOTS ?? '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
@@ -563,7 +575,7 @@ const withinRoots = (real) =>
 /**
  * Remote media, fetched by the bridge instead of by the page.
  *
- * JARVIS used to refuse to show anything he found on the web, and the refusal
+ * ALFRED used to refuse to show anything he found on the web, and the refusal
  * was not squeamishness — a bare <img src="https://some-cdn/..."> in a panel
  * genuinely did not work. Three reasons, and all three are fixed by moving the
  * fetch to this side of the wire:
@@ -676,7 +688,7 @@ async function proxyRemote(req, res, cors, { kinds, maxBytes, timeoutMs, ranged 
     if (sent > maxBytes) {
       // Headers went out long ago, so a truncated body is the only way left to
       // say no. The player sees a short read; we see this line in the log.
-      console.warn(`[jarvis] proxy cut ${target.href} at ${maxBytes} bytes`)
+      console.warn(`[alfred] proxy cut ${target.href} at ${maxBytes} bytes`)
       upstream.destroy()
       res.destroy()
       return
@@ -717,13 +729,13 @@ const http = await import('node:http')
 
 const handleRequest = async (req, res) => {
   if (!hostAllowed(req.headers.host)) {
-    console.warn(`[jarvis] refused http request for host ${req.headers.host ?? '(none)'}`)
+    console.warn(`[alfred] refused http request for host ${req.headers.host ?? '(none)'}`)
     res.writeHead(403)
     return res.end('forbidden')
   }
   const origin = req.headers.origin
   if (origin && !originAllowed(origin)) {
-    console.warn(`[jarvis] refused http request from origin ${origin}`)
+    console.warn(`[alfred] refused http request from origin ${origin}`)
     res.writeHead(403, { vary: 'origin' })
     return res.end('forbidden')
   }
@@ -1028,7 +1040,7 @@ const server = http.createServer((req, res) => {
   // unhandled rejection and leave the browser waiting on a socket that is
   // never going to answer.
   handleRequest(req, res).catch((err) => {
-    console.error('[jarvis] request failed:', err)
+    console.error('[alfred] request failed:', err)
     if (!res.headersSent) res.writeHead(500)
     res.end()
   })
@@ -1043,17 +1055,17 @@ const wss = new WebSocketServer({
   verifyClient: ({ origin, req }, done) => {
     const path = (req.url ?? '/').split('?')[0]
     if (path !== '/' && path !== '/ws') {
-      console.warn(`[jarvis] rejected websocket on path ${path}`)
+      console.warn(`[alfred] rejected websocket on path ${path}`)
       return done(false, 403, 'Forbidden')
     }
     if (!hostAllowed(req.headers.host)) {
-      console.warn(`[jarvis] rejected websocket for host ${req.headers.host ?? '(none)'}`)
+      console.warn(`[alfred] rejected websocket for host ${req.headers.host ?? '(none)'}`)
       return done(false, 403, 'Forbidden')
     }
     if (!originAllowed(origin)) {
       console.warn(
-        `[jarvis] rejected websocket from origin ${origin ?? '(none)'}` +
-          ' — set JARVIS_ALLOWED_ORIGINS to permit it',
+        `[alfred] rejected websocket from origin ${origin ?? '(none)'}` +
+          ' — set ALFRED_ALLOWED_ORIGINS to permit it',
       )
       return done(false, 403, 'Forbidden')
     }
@@ -1066,8 +1078,8 @@ const wss = new WebSocketServer({
 server.on('error', (err) => {
   console.error(
     err.code === 'EADDRINUSE'
-      ? `[jarvis] port ${PORT} on ${HOST} is already in use — stop whatever holds it or set JARVIS_BRIDGE_PORT`
-      : `[jarvis] bridge could not listen on ${HOST}:${PORT}: ${err.message}`,
+      ? `[alfred] port ${PORT} on ${HOST} is already in use — stop whatever holds it or set ALFRED_BRIDGE_PORT`
+      : `[alfred] bridge could not listen on ${HOST}:${PORT}: ${err.message}`,
   )
   process.exit(1)
 })
@@ -1076,40 +1088,40 @@ await new Promise((resolve) => server.listen(PORT, HOST, resolve))
 const LOOPBACK = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost'
 const bound = server.address()
 console.log(
-  `[jarvis] bridge listening on ws://${bound.family === 'IPv6' ? `[${bound.address}]` : bound.address}:${bound.port}`,
+  `[alfred] bridge listening on ws://${bound.family === 'IPv6' ? `[${bound.address}]` : bound.address}:${bound.port}`,
 )
 if (!LOOPBACK) {
   console.warn(
-    `[jarvis] WARNING: listening on ${HOST}, not loopback — other machines on this network can reach the bridge`,
+    `[alfred] WARNING: listening on ${HOST}, not loopback — other machines on this network can reach the bridge`,
   )
 }
 console.log(
-  `[jarvis] speech ${elevenKey() ? 'via ElevenLabs (key from MCP config)' : 'using browser fallback voice'}`,
+  `[alfred] speech ${elevenKey() ? 'via ElevenLabs (key from MCP config)' : 'using browser fallback voice'}`,
 )
-console.log(`[jarvis] model ${MODEL} · effort ${EFFORT}`)
+console.log(`[alfred] model ${MODEL} · effort ${EFFORT}`)
 console.log(
-  `[jarvis] MCP servers from config: ${Object.keys(MCP_SERVERS).join(', ') || 'none'}` +
+  `[alfred] MCP servers from config: ${Object.keys(MCP_SERVERS).join(', ') || 'none'}` +
     (ACCOUNT_CONNECTORS ? ' · account connectors ON' : ' · account connectors off'),
 )
 console.log(
-  `[jarvis] writes ${ALLOW_WRITES ? 'ENABLED' : 'disabled'}` +
-    (ALLOW_WRITES ? '' : ' — set JARVIS_ALLOW_WRITES=1 to permit shell/file/device actions'),
+  `[alfred] writes ${ALLOW_WRITES ? 'ENABLED' : 'disabled'}` +
+    (ALLOW_WRITES ? '' : ' — set ALFRED_ALLOW_WRITES=1 to permit shell/file/device actions'),
 )
 // Asynchronous, so it lands a beat after the rest of the banner. Worth printing
 // at all because an extension that is simply not running is indistinguishable
 // at the tool boundary from one that is broken, and this is the one place the
 // difference can be stated before anybody asks a question that depends on it.
-if (DISABLED.size) console.log(`[jarvis] disabled: ${[...DISABLED].join(', ')}`)
+if (DISABLED.size) console.log(`[alfred] disabled: ${[...DISABLED].join(', ')}`)
 if (!DISABLED.has('browser')) void chromeAvailable().then((ok) => {
   console.log(
     ok
-      ? `[jarvis] browser control ready${ALLOW_WRITES ? '' : ' (reading only — clicking and typing need JARVIS_ALLOW_WRITES=1)'}`
-      : '[jarvis] browser control unavailable — open Chrome with the Claude extension enabled',
+      ? `[alfred] browser control ready${ALLOW_WRITES ? '' : ' (reading only — clicking and typing need ALFRED_ALLOW_WRITES=1)'}`
+      : '[alfred] browser control unavailable — open Chrome with the Claude extension enabled',
   )
 })
 
 console.log(
-  '[jarvis] accepting local dev origins' +
+  '[alfred] accepting local dev origins' +
     (EXTRA_ORIGINS.size ? ` plus ${[...EXTRA_ORIGINS].join(', ')}` : '') +
     (ALLOW_NO_ORIGIN ? ' and clients that send no origin' : ''),
 )
@@ -1127,7 +1139,7 @@ const RESULT_FAILURES = {
 }
 
 wss.on('connection', (socket) => {
-  console.log('[jarvis] client connected')
+  console.log('[alfred] client connected')
 
   // Answer the HUD straight away rather than making it wait for the agent's
   // first turn. Refined later by the real init message.
@@ -1271,13 +1283,13 @@ wss.on('connection', (socket) => {
     if (!name || (id && seenTools.has(id))) return
     if (id) seenTools.add(id)
     // The display tool isn't work being done, it's the HUD drawing itself —
-    // announcing it would put "jarvis · display" in the tool badge and trigger
+    // announcing it would put "alfred · display" in the tool badge and trigger
     // a "working on it" filler for something already on screen.
-    if (name === 'mcp__jarvis__display') return
+    if (name === 'mcp__alfred__display') return
     // The ui_* tools are the same case one step further: retinting the
     // interface is the interface talking about itself, not work being done for
     // the user, and the badge would be describing the very thing they can see.
-    if (name.startsWith('mcp__jarvis_ui__')) return
+    if (name.startsWith('mcp__alfred_ui__')) return
     if (decideTool(name)) return sendTurn({ type: 'tool', name })
     if (id) heldTools.set(id, name)
   }
@@ -1298,7 +1310,7 @@ wss.on('connection', (socket) => {
       // connection rather than once.
       mcpServers: {
         ...MCP_SERVERS,
-        jarvis: displayServer(
+        alfred: displayServer(
           (panel) => send({ type: 'panel', panel }),
           (blade) => send({ type: 'blade', blade }),
           { camera: !DISABLED.has('camera') },
@@ -1306,30 +1318,30 @@ wss.on('connection', (socket) => {
         // The interface controls, on the same socket. A separate key because
         // MCP tool names are `mcp__<key>__<tool>` and one key can only carry
         // one server; the underscore in it is why decideTool and announceTool
-        // both name `jarvis_ui` explicitly.
+        // both name `alfred_ui` explicitly.
         ...(DISABLED.has('interface')
           ? {}
-          : { jarvis_ui: uiServer((op, args) => send({ type: 'ui', op, args })) }),
+          : { alfred_ui: uiServer((op, args) => send({ type: 'ui', op, args })) }),
         // The user's own Chrome, over the extension's native-host socket. It
         // holds no per-connection state, but it is built here with the rest so
         // the write gate is read once, at the same point as everything else.
         ...(DISABLED.has('browser')
           ? {}
-          : { jarvis_chrome: chromeServer({ allowWrites: ALLOW_WRITES }) }),
+          : { alfred_chrome: chromeServer({ allowWrites: ALLOW_WRITES }) }),
         // The camera, which unlike everything else here has to ask and wait.
-        ...(DISABLED.has('camera') ? {} : { jarvis_eyes: visionServer(ask) }),
+        ...(DISABLED.has('camera') ? {} : { alfred_eyes: visionServer(ask) }),
       },
       // A plain system prompt, not the claude_code preset. The preset is
       // tuned for a coding agent — verbose, file-oriented, and a large chunk
       // of input tokens on every turn. Replacing it makes the persona stick,
       // keeps answers short enough to speak, and cuts cost per turn.
       systemPrompt: SYSTEM_PROMPT,
-      // Run from JARVIS's own workspace rather than the home directory. MCP
+      // Run from ALFRED's own workspace rather than the home directory. MCP
       // discovery does not depend on it — settingSources is empty and the
       // servers are passed in explicitly above — and file tools resolve
       // relative paths, and get auto-approved, only inside it.
       cwd: WORKSPACE,
-      // Only the built-ins JARVIS uses. Everything else is not merely denied
+      // Only the built-ins ALFRED uses. Everything else is not merely denied
       // but absent from the model's context. See builtinTools in policy.mjs.
       tools: builtinTools(ALLOW_WRITES),
       hooks: { PreToolUse: [{ hooks: [enforcePolicy] }] },
@@ -1358,20 +1370,20 @@ wss.on('connection', (socket) => {
       model: MODEL,
       effort: EFFORT,
       maxTurns: 24,
-      // Nothing resumes a JARVIS session — every socket starts a new one — so
+      // Nothing resumes an ALFRED session — every socket starts a new one — so
       // the transcript the SDK writes by default is only ever a record: every
-      // question, every tool result (a page JARVIS read, a mail it opened, a
+      // question, every tool result (a page ALFRED read, a mail it opened, a
       // camera frame as base64) in ~/.claude/projects, beside your own Claude
       // Code history and listed by `claude --resume`. Off unless asked for.
-      persistSession: process.env.JARVIS_KEEP_TRANSCRIPTS === '1',
+      persistSession: process.env.ALFRED_KEEP_TRANSCRIPTS === '1',
       // Run the agent through something else — typically a sandbox wrapper
       // (bubblewrap, firejail, sandbox-exec) that execs the real CLI with the
       // arguments it was given. The SDK's bundled CLI is used when unset.
-      ...(process.env.JARVIS_CLAUDE_EXECUTABLE
-        ? { pathToClaudeCodeExecutable: process.env.JARVIS_CLAUDE_EXECUTABLE }
+      ...(process.env.ALFRED_CLAUDE_EXECUTABLE
+        ? { pathToClaudeCodeExecutable: process.env.ALFRED_CLAUDE_EXECUTABLE }
         : {}),
       permissionMode: 'default',
-      // Without this the SDK only emits whole assistant messages, and JARVIS
+      // Without this the SDK only emits whole assistant messages, and ALFRED
       // would sit silent until the entire answer was written. Partial events
       // are what let speech start on the first finished sentence.
       includePartialMessages: true,
@@ -1386,7 +1398,7 @@ wss.on('connection', (socket) => {
       // stays so that anything the CLI does ask about is still decided here.
       canUseTool: async (toolName) => {
         const ok = decideTool(toolName)
-        console.log(`[jarvis] tool ${toolName} -> ${ok ? 'allow' : 'deny'}`)
+        console.log(`[alfred] tool ${toolName} -> ${ok ? 'allow' : 'deny'}`)
         return ok
           ? { behavior: 'allow' }
           : {
@@ -1394,7 +1406,7 @@ wss.on('connection', (socket) => {
               // Every word of this can end up spoken, so it carries no command
               // to read out — the persona is forbidden from saying one aloud.
               message:
-                'Blocked: JARVIS is running in read-only mode and cannot take' +
+                'Blocked: ALFRED is running in read-only mode and cannot take' +
                 ' actions that change anything. Tell the user this action is' +
                 ' unavailable until they enable write access on the machine.',
             }
@@ -1406,7 +1418,7 @@ wss.on('connection', (socket) => {
   ;(async () => {
     try {
       for await (const msg of session) {
-        if (process.env.JARVIS_DEBUG === '1') {
+        if (process.env.ALFRED_DEBUG === '1') {
           console.log(
             '[msg]',
             msg.type,
@@ -1422,7 +1434,7 @@ wss.on('connection', (socket) => {
           // This is the ONLY place spoken text arrives: there is no top-level
           // text_delta message in the SDK union and the 'assistant' message
           // carries no deltas either. Turn includePartialMessages off and
-          // JARVIS goes completely mute.
+          // ALFRED goes completely mute.
           case 'stream_event': {
             const ev = msg.event
             if (
@@ -1470,7 +1482,7 @@ wss.on('connection', (socket) => {
             // A result is not automatically a success. The error subtypes
             // carry no `result` field at all, so reporting them as 'done' with
             // empty text is indistinguishable from a turn that simply had
-            // nothing to say — the HUD stops spinning and JARVIS stands there
+            // nothing to say — the HUD stops spinning and ALFRED stands there
             // silent. Say what happened instead.
             if (msg.subtype === 'success') {
               sendTurn({
@@ -1484,10 +1496,10 @@ wss.on('connection', (socket) => {
               // this id — sending an error would be a message nobody reads,
               // and logging one puts a failure in the log for a feature that
               // worked.
-              console.log('[jarvis] turn interrupted')
+              console.log('[alfred] turn interrupted')
             } else {
               console.error(
-                `[jarvis] turn failed: ${msg.subtype}`,
+                `[alfred] turn failed: ${msg.subtype}`,
                 msg.errors ?? '',
               )
               sendTurn({
@@ -1514,13 +1526,13 @@ wss.on('connection', (socket) => {
                 .filter((s) => s.status !== 'needs-auth' && s.status !== 'failed')
                 .map((s) => s.name)
               send({ type: 'ready', servers: usable })
-              console.log(`[jarvis] ${usable.length} MCP servers available`)
+              console.log(`[alfred] ${usable.length} MCP servers available`)
             }
             break
         }
       }
     } catch (err) {
-      console.error('[jarvis] session error:', err)
+      console.error('[alfred] session error:', err)
       send({ type: 'error', message: String(err?.message ?? err) })
       // The stream is finished either way — nothing will ever be read from it
       // again. Leaving the socket open would leave the client believing it has
@@ -1596,7 +1608,7 @@ wss.on('connection', (socket) => {
   })
 
   socket.on('close', () => {
-    console.log('[jarvis] client disconnected')
+    console.log('[alfred] client disconnected')
     closed = true
     deliver?.(null)
     session.close?.()

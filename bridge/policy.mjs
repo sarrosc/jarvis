@@ -1,11 +1,11 @@
 /**
- * What JARVIS may do, decided in one place.
+ * What ALFRED may do, decided in one place.
  *
  * Two layers, and the difference between them is the point of this file:
  *
  *   decideTool(name)         — the policy by tool *name*: which built-ins and
  *                              MCP tools count as reads and which need
- *                              JARVIS_ALLOW_WRITES. Unchanged from when it lived
+ *                              ALFRED_ALLOW_WRITES. Unchanged from when it lived
  *                              in server.mjs.
  *   checkToolUse(name, input) — the same policy plus the *arguments*: where a
  *                              file tool is pointed, what a fetch is aimed at.
@@ -134,10 +134,10 @@ export function decideTool(name, allowWrites = false) {
   if (server) {
     // The HUD, and the interface controls beside it. Both run in this process
     // and draw on our own screen, so neither is something to withhold —
-    // without them JARVIS has no display at all. They also have to be named
+    // without them ALFRED has no display at all. They also have to be named
     // here rather than left to the verb rules below, which read `ui_theme` as
     // a write and would hold the whole surface back behind allowWrites.
-    if (server === 'jarvis' || server === 'jarvis_ui') return true
+    if (server === 'alfred' || server === 'alfred_ui') return true
 
     // The browser server gates itself, at construction: chromeServer() only
     // builds the acting tools — click, type, form input, close tab — when
@@ -146,12 +146,12 @@ export function decideTool(name, allowWrites = false) {
     // reading verbs out of the name would only get it wrong: `chrome_navigate`
     // begins with no read verb and would fall to the write branch, which would
     // withhold the one tool the whole server is for.
-    if (server === 'jarvis_chrome') return true
+    if (server === 'alfred_chrome') return true
 
     // The camera. Not withheld behind allowWrites: looking changes nothing,
     // and the real gate is the browser's own camera permission plus an
     // indicator the user can see for as long as it is live.
-    if (server === 'jarvis_eyes') return true
+    if (server === 'alfred_eyes') return true
 
     const tool = mcpToolOf(name)
     if (EFFECTFUL_VERB.test(tool) && !VETO_EXEMPT.has(`${server}__${tool}`)) {
@@ -174,7 +174,7 @@ export function decideTool(name, allowWrites = false) {
  * offers the whole Claude Code set — thirty-odd tools, including scheduling
  * cloud agents, sending notifications, spawning subagents and asking questions
  * through a dialog nobody can see on a voice interface. Measured, their schemas
- * are about 10,000 input tokens on every turn, roughly 40% of JARVIS's context.
+ * are about 10,000 input tokens on every turn, roughly 40% of ALFRED's context.
  *
  * Grep and Glob are named because native builds otherwise search with Bash,
  * which is exactly what read-only mode withholds.
@@ -203,8 +203,8 @@ const PATH_FIELDS = {
  * Places that hold credentials, refused even inside an allowed root.
  *
  * Belt and braces: with the default roots none of these is reachable anyway,
- * but JARVIS_FILE_ROOTS can widen the roots to the whole home directory, and a
- * page JARVIS has just read is exactly the thing that would ask for them.
+ * but ALFRED_FILE_ROOTS can widen the roots to the whole home directory, and a
+ * page ALFRED has just read is exactly the thing that would ask for them.
  */
 const SECRET_DIRS = ['.ssh', '.gnupg', '.aws', '.azure', '.kube', '.docker', '.claude', '.config/gh', '.config/gcloud']
 const SECRET_FILES = /^(\.env(\..*)?|\.netrc|\.git-credentials|\.npmrc|\.pypirc|\.claude\.json|id_[a-z0-9]+|.*\.(pem|key|p12|pfx|kdbx))$/i
@@ -249,7 +249,7 @@ const inside = (root, p) => {
 
 /**
  * The directories file tools may touch: the workspace, the temp directory
- * (screenshots and generated media land there), and JARVIS_FILE_ROOTS.
+ * (screenshots and generated media land there), and ALFRED_FILE_ROOTS.
  */
 export function fileRoots({ workspace, extra = [] }) {
   return [workspace, tmpdir(), '/tmp', ...extra]
@@ -270,7 +270,7 @@ export function pathProblem(target, { cwd, roots }) {
   const real = resolveReal(resolvePath(cwd, expanded))
   if (!real) return `${target} cannot be resolved`
   if (!roots.some((root) => inside(root, real))) {
-    return `${target} is outside the folders JARVIS may use`
+    return `${target} is outside the folders ALFRED may use`
   }
   const home = realpathSync(homedir())
   if (inside(home, real)) {
@@ -296,7 +296,7 @@ export function checkToolUse(name, input, { allowWrites = false, cwd, roots }) {
     return {
       allow: false,
       reason:
-        'Blocked: JARVIS is running in read-only mode and cannot take actions' +
+        'Blocked: ALFRED is running in read-only mode and cannot take actions' +
         ' that change anything. Tell the user this action is unavailable' +
         ' until they enable write access on the machine.',
     }

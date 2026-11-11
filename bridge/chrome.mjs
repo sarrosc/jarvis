@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { Duplex } from 'node:stream'
 
 /**
- * JARVIS's hands on your actual browser.
+ * ALFRED's hands on your actual browser.
  *
  * Not Playwright. Playwright drives a fresh automation profile: no cookies, no
  * sessions, and a fingerprint that the sites worth visiting recognise on sight
@@ -46,7 +46,7 @@ import { Duplex } from 'node:stream'
  * that could break is therefore soft: the socket is re-discovered on every
  * reconnect rather than pinned, an unreachable extension is reported to the
  * model as a plain sentence instead of thrown, and no tool here is required for
- * the rest of JARVIS to work.
+ * the rest of ALFRED to work.
  */
 
 /**
@@ -263,7 +263,7 @@ class ChromeLink {
    * Run one extension tool. Queued behind whatever is already running.
    *
    * A dropped connection is retried exactly once, because the overwhelmingly
-   * common cause is a socket that went stale while JARVIS was idle — Chrome was
+   * common cause is a socket that went stale while ALFRED was idle — Chrome was
    * restarted between two questions — and re-dialling silently is much better
    * than telling the user their browser is unavailable when it is sitting right
    * there. A second failure is real and is reported.
@@ -273,7 +273,7 @@ class ChromeLink {
       const message = { method: 'execute_tool', params: { tool: name, args: args ?? {} } }
       try {
         return await this.request(message)
-      } catch (err) {
+      } catch {
         this.reset()
         return await this.request(message)
       }
@@ -319,14 +319,14 @@ const ON_WSL =
 const WSL_PIPE = 'wsl-named-pipe'
 
 /** The Windows user is not the Linux one, so the name is built on that side. */
-const PIPE_NAME_PS = process.env.JARVIS_CHROME_PIPE
-  ? `'${process.env.JARVIS_CHROME_PIPE.replace(/'/g, "''")}'`
+const PIPE_NAME_PS = process.env.ALFRED_CHROME_PIPE
+  ? `'${process.env.ALFRED_CHROME_PIPE.replace(/'/g, "''")}'`
   : "('claude-mcp-browser-bridge-' + $env:USERNAME)"
 
 const RELAY_PS = `$ErrorActionPreference = 'Stop'
 $pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', ${PIPE_NAME_PS}, [System.IO.Pipes.PipeDirection]::InOut, [System.IO.Pipes.PipeOptions]::Asynchronous)
-try { $pipe.Connect(${CONNECT_TIMEOUT_MS}) } catch { [Console]::Error.WriteLine('jarvis-relay: no pipe'); exit 2 }
-[Console]::Error.WriteLine('jarvis-relay: ready')
+try { $pipe.Connect(${CONNECT_TIMEOUT_MS}) } catch { [Console]::Error.WriteLine('alfred-relay: no pipe'); exit 2 }
+[Console]::Error.WriteLine('alfred-relay: ready')
 $in = [Console]::OpenStandardInput()
 $out = [Console]::OpenStandardOutput()
 $up = $in.CopyToAsync($pipe)
@@ -384,7 +384,7 @@ function openWslPipe() {
   let said = ''
   child.stderr.on('data', (d) => {
     said += d
-    if (!ready && said.includes('jarvis-relay: ready')) {
+    if (!ready && said.includes('alfred-relay: ready')) {
       ready = true
       stream.emit('connect')
     }
@@ -491,7 +491,7 @@ function clean(content) {
 }
 
 /**
- * The tab JARVIS is working in.
+ * The tab ALFRED is working in.
  *
  * Remembered here rather than threaded through the model, because making the
  * model carry it is both unreliable and pointless. Unreliable: it is a
@@ -660,7 +660,7 @@ const tabId = z
   .catch(undefined)
   .describe(
     'Which tab to act on — a numeric tabId from chrome_tabs. Omit it and the ' +
-      'tab JARVIS is already working in is used, opening one if there is none.',
+      'tab ALFRED is already working in is used, opening one if there is none.',
   )
 
 const NAVIGATE_DESCRIPTION = `Open a URL in the user's own Chrome.
@@ -716,7 +716,7 @@ export function chromeServer({ allowWrites }) {
 
     tool(
       'chrome_tabs',
-      'List the browser tabs JARVIS can act on, with their origins. Origins ' +
+      'List the browser tabs ALFRED can act on, with their origins. Origins ' +
         'only — page titles are written by the page and are not trustworthy.',
       {
         createIfEmpty: z
@@ -937,7 +937,7 @@ export function chromeServer({ allowWrites }) {
   }
 
   return createSdkMcpServer({
-    name: 'jarvis_chrome',
+    name: 'alfred_chrome',
     version: '1.0.0',
     instructions:
       "The user's own Chrome, already signed in to everything they use. " +

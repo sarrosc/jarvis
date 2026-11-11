@@ -1,5 +1,4 @@
-import { BACKEND } from '../config'
-import * as direct from './anthropic'
+import { BACKEND, activeServers } from '../config'
 import * as bridge from './bridge'
 import type { AskHandlers, Msg } from './anthropic'
 import type { Blade, Panel } from '../store'
@@ -22,6 +21,19 @@ export type { ConnectionState } from './bridge'
 
 export const usingBridge = BACKEND === 'bridge'
 
+/**
+ * The direct path drags in the whole Anthropic SDK. The bridge is the default
+ * and never needs it, so it is loaded on first use rather than shipped in the
+ * main bundle and parsed on every page load.
+ */
+type Direct = typeof import('./anthropic')
+let directMod: Direct | null = null
+let directLoad: Promise<Direct> | null = null
+function loadDirect(): Promise<Direct> {
+  directLoad ??= import('./anthropic').then((m) => (directMod = m))
+  return directLoad
+}
+
 /** Conversation state lives in the bridge session, so history is only threaded
  *  through on the direct path. */
 export async function ask(
@@ -31,11 +43,12 @@ export async function ask(
 ): Promise<{ text: string; tools: string[] }> {
   return usingBridge
     ? bridge.ask(prompt, handlers)
-    : direct.ask([...history, { role: 'user', content: prompt }], handlers)
+    : (await loadDirect()).ask([...history, { role: 'user', content: prompt }], handlers)
 }
 
 export async function warm(): Promise<void> {
   if (usingBridge) await bridge.warmBridge()
+  else await loadDirect()
 }
 
 /** The bridge reports its server list twice — from config on connect, then
@@ -92,7 +105,7 @@ export function watchCapture(
  */
 export function cancel(): void {
   if (usingBridge) bridge.cancel()
-  else direct.cancel()
+  else directMod?.cancel()
 }
 
 /** The older name for `cancel()`. */
@@ -115,7 +128,7 @@ export function isConnected(): boolean {
  * Connection state, for the UI.
  *
  * Worth surfacing because in bridge mode the socket *is* the conversation: all
- * of JARVIS's memory of the exchange lives in the agent session behind it, so a
+ * of ALFRED's memory of the exchange lives in the agent session behind it, so a
  * drop wipes the conversation while the transcript on screen still shows it.
  * Never fires on the direct path, which has no connection to lose.
  */
@@ -127,5 +140,7 @@ export function watchConnection(
 
 /** Labels for the HUD's SYSTEMS rail. */
 export function connectedLabels(): string[] {
-  return usingBridge ? bridge.bridgeServers() : direct.connectedLabels()
+  // Configured, not probed — see anthropic.ts. Read straight from config so
+  // the HUD can render before the SDK chunk has loaded.
+  return usingBridge ? bridge.bridgeServers() : activeServers().map((s) => s.label)
 }

@@ -18,7 +18,7 @@ const SERVER = fileURLToPath(new URL('../bridge/server.mjs', import.meta.url))
 /** Start a bridge on a free port; resolves once it says where it is listening. */
 function startBridge(env = {}) {
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, JARVIS_BRIDGE_PORT: '0', ...env },
+    env: { ...process.env, ALFRED_BRIDGE_PORT: '0', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let log = ''
@@ -127,11 +127,11 @@ test('is not reachable on any non-loopback interface', async () => {
   }
 })
 
-test('a blank JARVIS_BRIDGE_HOST still means loopback', async () => {
+test('a blank ALFRED_BRIDGE_HOST still means loopback', async () => {
   for (const blank of ['', '   ']) {
-    const b = await startBridge({ JARVIS_BRIDGE_HOST: blank })
+    const b = await startBridge({ ALFRED_BRIDGE_HOST: blank })
     try {
-      assert.equal(b.host, '127.0.0.1', `JARVIS_BRIDGE_HOST=${JSON.stringify(blank)}`)
+      assert.equal(b.host, '127.0.0.1', `ALFRED_BRIDGE_HOST=${JSON.stringify(blank)}`)
     } finally {
       b.child.kill()
     }
@@ -159,7 +159,7 @@ test('refuses a WebSocket with a forged-looking foreign Origin', async () => {
 
 test('an occupied port is reported plainly and exits non-zero', async () => {
   const child = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, JARVIS_BRIDGE_PORT: String(bridge.port) },
+    env: { ...process.env, ALFRED_BRIDGE_PORT: String(bridge.port) },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let log = ''

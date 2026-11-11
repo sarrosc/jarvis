@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { builtinTools, checkToolUse, decideTool, fetchTargetProblem, fileRoots } from '../bridge/policy.mjs'
 
-const workspace = mkdtempSync(join(tmpdir(), 'jarvis-ws-'))
+const workspace = mkdtempSync(join(tmpdir(), 'alfred-ws-'))
 const roots = fileRoots({ workspace })
 const ctx = (allowWrites = false) => ({ allowWrites, cwd: workspace, roots })
 const allowed = (name, input, w) => checkToolUse(name, input, ctx(w)).allow
@@ -14,7 +14,7 @@ test('decideTool keeps its existing verdicts', () => {
   assert.equal(decideTool('Read'), true)
   assert.equal(decideTool('Bash'), false)
   assert.equal(decideTool('Bash', true), true)
-  assert.equal(decideTool('mcp__jarvis__display'), true)
+  assert.equal(decideTool('mcp__alfred__display'), true)
   assert.equal(decideTool('mcp__someserver__list_devices'), true)
   assert.equal(decideTool('mcp__someserver__install_apk'), false)
   assert.equal(decideTool('mcp__higgsfield__generate_image'), true)
@@ -53,7 +53,7 @@ test('a symlink inside the workspace cannot point the read elsewhere', () => {
 })
 
 test('a dangling symlink is judged by where it points, not where it sits', () => {
-  const outside = mkdtempSync(join(homedir(), '.jarvis-test-outside-'))
+  const outside = mkdtempSync(join(homedir(), '.alfred-test-outside-'))
   const link = join(workspace, 'dangling.txt')
   try {
     symlinkSync(join(outside, 'would-be-created.txt'), link)
@@ -112,7 +112,7 @@ test('WebFetch names that resolve to private addresses are caught', async () => 
   assert.match(await fetchTargetProblem('http://127.0.0.1/'), /blocked host/)
 })
 
-test('only the built-ins JARVIS uses are offered', () => {
+test('only the built-ins ALFRED uses are offered', () => {
   const ro = builtinTools(false)
   assert.deepEqual(ro.filter((t) => ['Bash', 'Write', 'Edit'].includes(t)), [])
   for (const absent of ['Agent', 'Task', 'CronCreate', 'RemoteTrigger', 'SendMessage', 'AskUserQuestion', 'Skill']) {

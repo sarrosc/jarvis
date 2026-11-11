@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 const SERVER = fileURLToPath(new URL('../bridge/server.mjs', import.meta.url))
 
 function bannerWith(overrides) {
-  const home = mkdtempSync(join(tmpdir(), 'jarvis-home-'))
+  const home = mkdtempSync(join(tmpdir(), 'alfred-home-'))
   writeFileSync(
     join(home, '.claude.json'),
     JSON.stringify({
@@ -21,9 +21,9 @@ function bannerWith(overrides) {
       },
     }),
   )
-  const env = { ...process.env, HOME: home, USERPROFILE: home, JARVIS_BRIDGE_PORT: '0' }
-  delete env.JARVIS_MCP_SERVERS
-  delete env.JARVIS_ACCOUNT_CONNECTORS
+  const env = { ...process.env, HOME: home, USERPROFILE: home, ALFRED_BRIDGE_PORT: '0' }
+  delete env.ALFRED_MCP_SERVERS
+  delete env.ALFRED_ACCOUNT_CONNECTORS
   Object.assign(env, overrides)
   const child = spawn(process.execPath, [SERVER], { env, stdio: ['ignore', 'pipe', 'pipe'] })
   return new Promise((resolve, reject) => {
@@ -50,17 +50,17 @@ test('unset passes every configured server, as before', async () => {
   assert.match(await bannerWith({}), /config: search, mailer ·/)
 })
 
-test('JARVIS_MCP_SERVERS passes only the named servers', async () => {
-  const line = await bannerWith({ JARVIS_MCP_SERVERS: 'search' })
+test('ALFRED_MCP_SERVERS passes only the named servers', async () => {
+  const line = await bannerWith({ ALFRED_MCP_SERVERS: 'search' })
   assert.match(line, /config: search ·/)
   assert.doesNotMatch(line, /mailer/)
 })
 
-test('an empty JARVIS_MCP_SERVERS passes none', async () => {
-  assert.match(await bannerWith({ JARVIS_MCP_SERVERS: '' }), /config: none/)
+test('an empty ALFRED_MCP_SERVERS passes none', async () => {
+  assert.match(await bannerWith({ ALFRED_MCP_SERVERS: '' }), /config: none/)
 })
 
 test('account connectors are off unless asked for', async () => {
   assert.match(await bannerWith({}), /account connectors off/)
-  assert.match(await bannerWith({ JARVIS_ACCOUNT_CONNECTORS: '1' }), /account connectors ON/)
+  assert.match(await bannerWith({ ALFRED_ACCOUNT_CONNECTORS: '1' }), /account connectors ON/)
 })

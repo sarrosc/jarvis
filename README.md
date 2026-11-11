@@ -1,7 +1,7 @@
-# J.A.R.V.I.S.
+# A.L.F.R.E.D.
 
 A browser voice assistant with an Iron Man holographic interface. Say
-**"Hey Jarvis"**, he wakes, listens, and does real things through your tools —
+**"Hey Alfred"**, he wakes, listens, and does real things through your tools —
 searches the web, generates images, drives your phone, reads your mail. The face
 is a web page (React + Vite + Three.js + custom GLSL). The brain is Claude Code,
 run headless as a library.
@@ -10,7 +10,7 @@ run headless as a library.
 account, no cloud bill — the brain runs on your existing Claude Code login, and
 the heavy work (the model itself) runs on Anthropic's servers, so even a low-end
 laptop only has to draw the interface. **ElevenLabs is an optional add-on** that
-gives JARVIS a much better voice and sharper hearing; without it he speaks and
+gives ALFRED a much better voice and sharper hearing; without it he speaks and
 listens through the browser's own speech, and everything still works.
 
 ---
@@ -30,7 +30,7 @@ can have — Node.js and Chrome. That's the whole list.
 - **Google Chrome or Microsoft Edge**, in a **real browser window** — not an
   embedded preview pane. Preview panes (including the one inside editors and
   Claude Code) block microphone access, so the page loads and looks right but
-  never hears you. JARVIS also needs WebGL, which these browsers provide.
+  never hears you. ALFRED also needs WebGL, which these browsers provide.
 - **Optional: an ElevenLabs API key** — a good add-on, not a requirement. It
   gives a better voice and sharper transcription; the free tier is plenty for a
   demo. Without it, everything runs on the browser's own speech.
@@ -49,7 +49,7 @@ npm install
 npm start          # runs the brain and the face together
 ```
 
-Then open the URL it prints (http://localhost:5173) in **Chrome**, click **INITIALISE**, and say **“Hey Jarvis”**.
+Then open the URL it prints (http://localhost:5173) in **Chrome**, click **INITIALISE**, and say **“Hey Alfred”**.
 
 Prefer two terminals? Run them separately instead:
 
@@ -75,21 +75,21 @@ Then open the app in a **real Chrome or Edge window**:
 open http://localhost:5173
 ```
 
-Click **INITIALISE**, allow the microphone when asked, and say **"Hey Jarvis"**.
+Click **INITIALISE**, allow the microphone when asked, and say **"Hey Alfred"**.
 
 > It has to be a real browser window. Embedded preview panes block the
-> microphone, so JARVIS will look perfectly alive and simply never respond.
+> microphone, so ALFRED will look perfectly alive and simply never respond.
 
 ---
 
 ## How it works
 
-JARVIS is two processes. The browser is the face and the voice; the bridge is
+ALFRED is two processes. The browser is the face and the voice; the bridge is
 the brain and the hands.
 
 ```
   ┌─ browser (the face) ───────────────┐        ┌─ bridge (the brain) ─────────────┐
-  │  "Hey Jarvis" wake word            │        │  Node · bridge/server.mjs        │
+  │  "Hey Alfred" wake word            │        │  Node · bridge/server.mjs        │
   │  local VAD  →  speech to text      │   ws   │  Claude Agent SDK                │
   │  reactor UI (Three.js + GLSL)      │◄─────► │   = Claude Code, headless        │
   │  text to speech                    │  8787  │  spawns your MCP servers         │
@@ -109,8 +109,8 @@ rest. The bridge can. And because it is the Agent SDK, it authenticates off your
 existing Claude Code login: no API key, billed to that same Claude account.
 
 **The model.** `claude-opus-5` at effort `medium` by default. Override with the
-`JARVIS_MODEL` and `JARVIS_EFFORT` environment variables. On startup the bridge
-prints its choice, e.g. `[jarvis] model claude-opus-5 · effort medium`.
+`ALFRED_MODEL` and `ALFRED_EFFORT` environment variables. On startup the bridge
+prints its choice, e.g. `[alfred] model claude-opus-5 · effort medium`.
 
 ### The voice pipeline
 
@@ -118,7 +118,7 @@ The loop is designed so that nothing silently dies and barge-in feels natural.
 
 - **Detection is local.** An energy-based voice-activity detector
   (`src/lib/vad.ts`) decides when you are speaking. It is instant, cannot quietly
-  fail, and is what makes **barge-in** work — speak while JARVIS is talking and he
+  fail, and is what makes **barge-in** work — speak while ALFRED is talking and he
   stops.
 - **Transcription has two tiers, chosen automatically at boot.** The browser asks
   the bridge `/health` and picks the best available:
@@ -137,15 +137,15 @@ ElevenLabs key) once at boot and picks the engines.
 
 ---
 
-## What JARVIS can do
+## What ALFRED can do
 
-Beyond answering, JARVIS reaches every MCP server in your Claude Code
+Beyond answering, ALFRED reaches every MCP server in your Claude Code
 configuration, and can drive his own interface.
 
 ### Your tools
 
 Every server in your `~/.claude.json` is handed to the SDK explicitly, or only the
-ones you name in `JARVIS_MCP_SERVERS`. Depending on what you have installed, that
+ones you name in `ALFRED_MCP_SERVERS`. Depending on what you have installed, that
 is roughly:
 
 - **Web & search** — `exa`, `serper`, `serpapi`
@@ -164,11 +164,11 @@ A few things you can say:
 > **Note on account connectors.** Servers you added through your **claude.ai
 > account** (mail, drive, calendar and other account connectors) are not in `~/.claude.json`,
 > but the CLI fetches them on its own and they join the session from the second
-> turn. The bridge keeps them out by default; set `JARVIS_ACCOUNT_CONNECTORS=1`
-> to let them in, and `JARVIS_MCP_SERVERS` to choose which `~/.claude.json`
-> servers JARVIS gets.
+> turn. The bridge keeps them out by default; set `ALFRED_ACCOUNT_CONNECTORS=1`
+> to let them in, and `ALFRED_MCP_SERVERS` to choose which `~/.claude.json`
+> servers ALFRED gets.
 
-### JARVIS controls the interface
+### ALFRED controls the interface
 
 He drives the UI through MCP tools the bridge exposes:
 
@@ -185,7 +185,7 @@ command.
 
 ### The heads-up display
 
-JARVIS authors panels with a `display` tool against a fixed `.hud-*` design
+ALFRED authors panels with a `display` tool against a fixed `.hud-*` design
 system. The browser sanitises the markup (DOMPurify, a class allowlist and a
 strict CSP) before rendering. Rich media works — images, `<video>`, and
 YouTube/Vimeo embeds. Remote images and video are fetched **server-side** through
@@ -199,7 +199,7 @@ chose.
 
 | Key / phrase | Does |
 |---|---|
-| **"Hey Jarvis"** | Wake him |
+| **"Hey Alfred"** | Wake him |
 | **Space** | Talk without the wake word |
 | Just speak | Interrupt him mid-sentence (barge-in) |
 | **V** | Cycle the browser voice |
@@ -213,7 +213,7 @@ chose.
 
 Power-up plays a four-beat Iron Man start-up (`src/ui/Boot.tsx`): an
 "INITIATING SYSTEM" status bar with a segmented progress bar and boot log; then
-concentric reticle rings resolving into "J.A.R.V.I.S"; then a suit schematic;
+concentric reticle rings resolving into "A.L.F.R.E.D"; then a suit schematic;
 then the triangular arc reactor lighting up — with a start-up sound under it
 (`public/audio/boot-music.mp3`).
 
@@ -228,24 +228,24 @@ Everything is optional in bridge mode. Frontend settings live in `.env.local`
 
 | Variable | Default | Effect |
 |---|---|---|
-| `JARVIS_BRIDGE_PORT` | `8787` | Port for the WebSocket + HTTP endpoints |
-| `JARVIS_BRIDGE_HOST` | `127.0.0.1` | Interface to listen on. Any other address puts the agent on your network |
-| `JARVIS_ALLOWED_HOSTS` | none | Extra hostnames the bridge answers to; a request for any other name gets a 403 |
-| `JARVIS_MODEL` | `claude-opus-5` | Model to run |
-| `JARVIS_EFFORT` | `medium` | Reasoning effort |
-| `JARVIS_ALLOW_WRITES` | off | `1` allows effectful tools (see below) |
-| `JARVIS_MCP_SERVERS` | all configured | Comma-separated `~/.claude.json` servers to pass on; empty passes none |
-| `JARVIS_ACCOUNT_CONNECTORS` | off | `1` lets your claude.ai account's connectors join the session |
-| `JARVIS_DISABLE` | none | Comma-separated capabilities to leave out: `browser`, `camera`, `interface` |
-| `JARVIS_ALLOWED_ORIGINS` | local dev | Extra WebSocket origins to accept |
-| `JARVIS_ALLOW_NO_ORIGIN` | off | Accept connections with no `Origin` header |
-| `JARVIS_WORKSPACE` | `~/.jarvis/workspace` | The agent's working directory; file tools are confined to it and the temp directory |
-| `JARVIS_FILE_ROOTS` | none | Extra folders the file tools and the `/file` endpoint may use |
-| `JARVIS_KEEP_TRANSCRIPTS` | off | `1` keeps the SDK's session transcripts in `~/.claude/projects` |
-| `JARVIS_CLAUDE_EXECUTABLE` | bundled CLI | Run the agent through this executable instead, e.g. a sandbox wrapper that execs the real CLI |
-| `JARVIS_CHROME_PIPE` | none | WSL only: the Windows pipe name the browser relay connects to |
-| `JARVIS_DEBUG` | off | `1` logs every agent message to the bridge terminal, answer text and tool calls included |
-| `JARVIS_VOICE_ID` | none | ElevenLabs voice id |
+| `ALFRED_BRIDGE_PORT` | `8787` | Port for the WebSocket + HTTP endpoints |
+| `ALFRED_BRIDGE_HOST` | `127.0.0.1` | Interface to listen on. Any other address puts the agent on your network |
+| `ALFRED_ALLOWED_HOSTS` | none | Extra hostnames the bridge answers to; a request for any other name gets a 403 |
+| `ALFRED_MODEL` | `claude-opus-5` | Model to run |
+| `ALFRED_EFFORT` | `medium` | Reasoning effort |
+| `ALFRED_ALLOW_WRITES` | off | `1` allows effectful tools (see below) |
+| `ALFRED_MCP_SERVERS` | all configured | Comma-separated `~/.claude.json` servers to pass on; empty passes none |
+| `ALFRED_ACCOUNT_CONNECTORS` | off | `1` lets your claude.ai account's connectors join the session |
+| `ALFRED_DISABLE` | none | Comma-separated capabilities to leave out: `browser`, `camera`, `interface` |
+| `ALFRED_ALLOWED_ORIGINS` | local dev | Extra WebSocket origins to accept |
+| `ALFRED_ALLOW_NO_ORIGIN` | off | Accept connections with no `Origin` header |
+| `ALFRED_WORKSPACE` | `~/.alfred/workspace` | The agent's working directory; file tools are confined to it and the temp directory |
+| `ALFRED_FILE_ROOTS` | none | Extra folders the file tools and the `/file` endpoint may use |
+| `ALFRED_KEEP_TRANSCRIPTS` | off | `1` keeps the SDK's session transcripts in `~/.claude/projects` |
+| `ALFRED_CLAUDE_EXECUTABLE` | bundled CLI | Run the agent through this executable instead, e.g. a sandbox wrapper that execs the real CLI |
+| `ALFRED_CHROME_PIPE` | none | WSL only: the Windows pipe name the browser relay connects to |
+| `ALFRED_DEBUG` | off | `1` logs every agent message to the bridge terminal, answer text and tool calls included |
+| `ALFRED_VOICE_ID` | none | ElevenLabs voice id |
 | `ELEVENLABS_API_KEY` | none | Optional; enables the ElevenLabs voice + Scribe |
 
 ### Frontend (`.env.local`)
@@ -283,8 +283,8 @@ settings and any global `bypassPermissions` cannot override it.
 
 A `PreToolUse` hook applies that policy to every call, including the reads the
 Claude Code CLI would otherwise approve by itself. In read-only mode the agent
-has no shell, and its file tools reach only its workspace (`~/.jarvis/workspace`),
-the temp directory and any folders in `JARVIS_FILE_ROOTS`. Paths that hold
+has no shell, and its file tools reach only its workspace (`~/.alfred/workspace`),
+the temp directory and any folders in `ALFRED_FILE_ROOTS`. Paths that hold
 credentials, such as `~/.ssh`, `~/.claude` and `.env` files, stay refused even
 inside those folders.
 
@@ -300,7 +300,7 @@ PowerShell too. With `npm start`, use `npm start -- --writes`. Writes add `Bash`
 `Write`, `Edit` and `NotebookEdit` to the agent's tools. The file tools stay
 inside the same folders; the shell can reach anything your user account can.
 
-> Read `decideTool()` before you do. *"Hey Jarvis, clean up my downloads folder"*
+> Read `decideTool()` before you do. *"Hey Alfred, clean up my downloads folder"*
 > means something rather different with writes enabled.
 
 ---
@@ -317,8 +317,8 @@ window** (not an embedded preview), and you must have **allowed the microphone**
 **Bridge not reachable.** Check that `npm run bridge` is still running in its
 terminal, and that nothing else is holding port `8787`. If the port is taken,
 the bridge says so in one line at startup and exits. It listens on `127.0.0.1`
-only. Reaching it from another machine takes `JARVIS_BRIDGE_HOST` and
-`JARVIS_ALLOWED_HOSTS`, and your own authentication in front of it first.
+only. Reaching it from another machine takes `ALFRED_BRIDGE_HOST` and
+`ALFRED_ALLOWED_HOSTS`, and your own authentication in front of it first.
 
 **Browser control on Windows.** The bridge finds the Claude extension's named
 pipe, `\\.\pipe\claude-mcp-browser-bridge-<user>`, by itself. If the boot log
@@ -351,20 +351,20 @@ The bridge's defences live in `bridge/server.mjs` and `bridge/policy.mjs`:
 - It listens on `127.0.0.1` and answers only requests addressed to `localhost`,
   `127.0.0.1` or `[::1]`, which blocks DNS rebinding.
 - The WebSocket accepts only local dev origins (add more with
-  `JARVIS_ALLOWED_ORIGINS`).
+  `ALFRED_ALLOWED_ORIGINS`).
 - `/file`, `/img` and `/media` validate the scheme, confine to allowed roots,
   resolve the real path, and refuse private and loopback addresses (SSRF guard).
 - The tool gate (`decideTool`) is default-deny for effectful MCP tools.
 - A `PreToolUse` hook enforces the tool policy on every call. File tools stay
-  inside the workspace, the temp directory and `JARVIS_FILE_ROOTS`, and
+  inside the workspace, the temp directory and `ALFRED_FILE_ROOTS`, and
   `WebFetch` cannot reach loopback, LAN or cloud metadata addresses.
 - claude.ai account connectors stay out of the session unless
-  `JARVIS_ACCOUNT_CONNECTORS=1`, and `JARVIS_MCP_SERVERS` narrows which
+  `ALFRED_ACCOUNT_CONNECTORS=1`, and `ALFRED_MCP_SERVERS` narrows which
   `~/.claude.json` servers the agent gets.
 - Session transcripts are written to `~/.claude/projects` only when
-  `JARVIS_KEEP_TRANSCRIPTS=1`.
-- `JARVIS_DISABLE` removes browser control, the camera or the interface tools
-  entirely, and `JARVIS_CLAUDE_EXECUTABLE` can run the agent inside a sandbox
+  `ALFRED_KEEP_TRANSCRIPTS=1`.
+- `ALFRED_DISABLE` removes browser control, the camera or the interface tools
+  entirely, and `ALFRED_CLAUDE_EXECUTABLE` can run the agent inside a sandbox
   wrapper.
 - A strict CSP in `index.html`; model-authored panel HTML is sanitised.
 

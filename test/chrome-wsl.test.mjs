@@ -13,8 +13,8 @@ const onWsl =
   process.platform === 'linux' &&
   (Boolean(process.env.WSL_DISTRO_NAME) || existsSync('/proc/sys/fs/binfmt_misc/WSLInterop'))
 
-const PIPE = `jarvis-test-${randomBytes(4).toString('hex')}`
-process.env.JARVIS_CHROME_PIPE = PIPE
+const PIPE = `alfred-test-${randomBytes(4).toString('hex')}`
+process.env.ALFRED_CHROME_PIPE = PIPE
 
 /** A one-shot fake native host. Resolves once the pipe exists. */
 function fakeHost(replyText) {
